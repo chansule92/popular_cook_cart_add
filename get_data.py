@@ -5,6 +5,7 @@ from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime, timedelta
 import re
+
 # 🔑 발급받은 키를 여기에 넣으세요
 YOUTUBE_API_KEY = key.youtube_api_key
 GEMINI_API_KEY = key.gemini_api_key
@@ -54,69 +55,62 @@ trending_30 = get_real_trending_cooking(youtube)
 
 
 #최근 2주내 업로드된 요리 레시피 영상 중 조회수 상위
-
-import googleapiclient.discovery
-from google import genai
-from youtube_transcript_api import YouTubeTranscriptApi
-from datetime import datetime, timedelta
-import re
-YOUTUBE_API_KEY = key.youtube_api_key
-GEMINI_API_KEY = key.gemini_api_key
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-two_weeks_ago = (datetime.utcnow() - timedelta(days=14)).isoformat() + "Z"
-request = youtube.search().list(
-    q="레시피 | 요리 | 만드는 법 | 황금레시피",
-    part="snippet",
-    publishedAfter=two_weeks_ago,
-    order="viewCount",
-    maxResults=50,
-    type="video",
-    videoCategoryId="22",
-    regionCode="KR",
-    relevanceLanguage="ko" # 1차 언어 필터
-)
-youtube_search_response = request.execute()
-korean_raw_candidates = []
-for item in youtube_search_response['items']:
-    title = item['snippet']['title']
-    if is_korean(title): # 2차 한글 정규식 필터
-        korean_raw_candidates.append({
-            'video_id': item['id']['videoId'],
-            'title': title
-        })
-titles_for_ai = "\n".join([f"{i}. {v['title']}" for i, v in enumerate(korean_raw_candidates)])
-prompt = f"""
-너는 요리 전문 큐레이터야. 아래 리스트에서 '실제로 사람이 먹는 음식을 만드는 요리 레시피'만 골라줘.
-
-[제외 대상]
-- 음식이 아닌 것 (인형, 장난감, 연애, 심리, 화나게 만드는 법 등)
-- 사람이 먹을 수 없는 것
-
-결과는 오직 선택된 번호들만 콤마(,)로 구분해서 한 줄로 출력해.
-리스트:
-{titles_for_ai}
-"""
-response = gemini_client.models.generate_content(
-    model='gemini-2.5-flash',
-    contents=[prompt],
-    config=genai.types.GenerateContentConfig(
-        temperature=0.0
+def get_twoweek_cooking(youtube):
+    two_weeks_ago = (datetime.utcnow() - timedelta(days=14)).isoformat() + "Z"
+    request = youtube.search().list(
+        q="레시피 | 요리 | 만드는 법 | 황금레시피",
+        part="snippet",
+        publishedAfter=two_weeks_ago,
+        order="viewCount",
+        maxResults=50,
+        type="video",
+        videoCategoryId="22",
+        regionCode="KR",
+        relevanceLanguage="ko" # 1차 언어 필터
     )
-)
+    youtube_search_response = request.execute()
+    korean_raw_candidates = []
+    for item in youtube_search_response['items']:
+        title = item['snippet']['title']
+        if is_korean(title): # 2차 한글 정규식 필터
+            korean_raw_candidates.append({
+                'video_id': item['id']['videoId'],
+                'title': title
+            })
+    return korean_raw_candidates
 
-summary_text = response.text.strip()
-selected_indices = [int(x.strip()) for x in summary_text.split(',') if x.strip().isdigit()]
-
-# 최종 리스트 생성
-final_list = [korean_raw_candidates[i] for i in selected_indices if i < len(korean_raw_candidates)]
+    
+titles_for_ai = "\n".join([f"{i}. {v['title']}" for i, v in enumerate(get_twoweek_cooking(youtube))])
+def llm_verify(titles_for_ai):
+    prompt = f"""
+    너는 요리 전문 큐레이터야. 아래 리스트에서 '실제로 사람이 먹는 음식을 만드는 요리 레시피'만 골라줘.
+    
+    [제외 대상]
+    - 음식이 아닌 것 (인형, 장난감, 연애, 심리, 화나게 만드는 법 등)
+    - 사람이 먹을 수 없는 것
+    
+    결과는 오직 선택된 번호들만 콤마(,)로 구분해서 한 줄로 출력해.
+    리스트:
+    {titles_for_ai}
+    """
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=[prompt],
+        config=genai.types.GenerateContentConfig(
+            temperature=0.0
+        )
+    )
+    
+    summary_text = response.text.strip()
+    selected_indices = [int(x.strip()) for x in summary_text.split(',') if x.strip().isdigit()]
+    # 최종 리스트 생성
+    final_list = [korean_raw_candidates[i] for i in selected_indices if i < len(korean_raw_candidates)]
+    return final_list
 
 
 
 #메이저채널에서 가져오기
-import datetime
-
-def get_recent_videos_with_views(youtube, channel_ids):
+def get_popular_channel_cooking(youtube, channel_ids):
     two_weeks_ago = (datetime.datetime.utcnow() - datetime.timedelta(days=14)).isoformat() + "Z"
     recent_videos = []
     video_ids = []
@@ -163,6 +157,3 @@ target_channels = [
 
 # 기존과 똑같은 포맷으로 추출
 candidate_list = get_recent_videos_with_views(youtube, target_channels)
-
-for v in candidate_list:
-    print(f"ID: {v['video_id']} | 조회수: {v['view_count']:,} | 제목: {v['title']}")
