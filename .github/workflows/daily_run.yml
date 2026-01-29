@@ -25,10 +25,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main.py
         
-      - name: Commit and Push changes # 생성된 CSV를 다시 저장소에 업로드
+      - name: Commit and Push changes
         run: |
           git config --global user.name "recipe-bot"
           git config --global user.email "bot@github.com"
-          git add daily_recipe_stats.csv
-          git commit -m "Update daily stats [skip ci]" || echo "No changes to commit"
+          git add *.csv
+          git commit -m "Add daily stats for $(date +'%Y-%m-%d') [skip ci]" || echo "No changes to commit"
           git push
