@@ -29,6 +29,13 @@ def get_weekly_top_10():
     if os.path.exists(summary_file_name):
         summary_stats = pd.read_csv(summary_file_name)
     merge_df = pd.merge(stats,summary_stats,on='video_id',how='inner')
-    merge_df['view_growth'] = merge_df['current_view'] - merge_df['start_view']
-    top_20 = merge_df.sort_values(by='view_growth', ascending=False).head(20)
+    
+    merge_df['first_date'] = pd.to_datetime(merge_df['first_date'])
+    today_dt = pd.to_datetime(today.strftime('%Y-%m-%d'))
+    # 2. 날짜 차이 계산 (최소 1일로 설정하여 ZeroDivision 에러 방지)
+    merge_df['days_diff'] = (today_dt - merge_df['first_date']).dt.days
+    merge_df.loc[merge_df['days_diff'] < 1, 'days_diff'] = 1
+    merge_df['daily_growth'] = (merge_df['current_view'] - merge_df['start_view']) / merge_df['days_diff']
+    
+    top_20 = merge_df.sort_values(by='daily_growth', ascending=False).head(20)
     return top_20
