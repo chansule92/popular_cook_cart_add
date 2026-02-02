@@ -1,6 +1,8 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import json
+from youtube_transcript_api import YouTubeTranscriptApi
 def get_weekly_top_10():
     all_data = []
     today = datetime.now()
@@ -39,3 +41,24 @@ def get_weekly_top_10():
     
     top_20 = merge_df.sort_values(by='daily_growth', ascending=False).head(20)
     return top_20
+
+def material_extraction(video_id):
+    transcript_list = YouTubeTranscriptApi().list(video_id)
+    transcript = transcript_list.find_transcript(['ko','en'])
+    transcript_data=transcript.fetch()
+    transcript_text = " ".join([entry.text for entry in transcript_data])
+    prompt = f"""
+    다음 요리 영상 자막을 분석해서 1. 재료 이름, 2. 필요 수량, 3. 쇼핑몰 검색을 위한 최적의 키워드를 JSON 배열 형태로 추출해줘. 
+    예: 'name': '양파', 'amount': '0.5개', 'search_keyword': '햇양파 1kg'
+    자막 내용: {transcript_text}
+    """
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=[prompt],
+        config=genai.types.GenerateContentConfig(
+            temperature=0.0,
+            response_mime_type="application/json"
+        )
+    )
+    search_text = json.loads(response.text)
+    return search_text
