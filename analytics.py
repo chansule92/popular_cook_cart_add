@@ -62,3 +62,21 @@ def material_extraction(video_id):
     )
     search_text = json.loads(response.text)
     return search_text
+
+
+import requests
+from bs4 import BeautifulSoup
+import json
+
+headers = {
+    "User-Agent": User-Agent,
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://www.kurly.com/"
+}
+
+url = f"https://api.kurly.com/search/v4/sites/market/normal-search?keyword=돼지+목살+스테이크용+500g&sortType=4&page=1"
+
+res = requests.get(url, headers=headers)
+
+if res.status_code == 200:
+    data = res.json() # HTML이 아니라 JSON으로 바로 받기
