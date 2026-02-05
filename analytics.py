@@ -64,19 +64,57 @@ def material_extraction(video_id):
     return search_text
 
 
-import requests
-from bs4 import BeautifulSoup
-import json
+import time
+def product_select(material_list):
+    product_list=[]
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.kurly.com/"
+    }
+    for i in material_list:
+        name = i['name']
+        useage = i['useage']
+        search_keyword = i['search_keyword']
+        url = f"https://api.kurly.com/search/v4/sites/market/normal-search?keyword={search_keyword}&sortType=4&page=1"
+        
+        res = requests.get(url, headers=headers)
+        
+        if res.status_code == 200:
+            data = res.json() 
+        item_list=data['data']['listSections'][0]['data']['items'][:5]
 
-headers = {
-    "User-Agent": User-Agent,
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": "https://www.kurly.com/"
-}
-
-url = f"https://api.kurly.com/search/v4/sites/market/normal-search?keyword=돼지+목살+스테이크용+500g&sortType=4&page=1"
-
-res = requests.get(url, headers=headers)
-
-if res.status_code == 200:
-    data = res.json() # HTML이 아니라 JSON으로 바로 받기
+        string = ''
+        for i in item_list:
+            product_id = i['no']
+            product_name = i['name']
+            product_desc = i['shortDescription']
+            product_img = i['listImageUrl']
+            product_string = str(product_id) + '|' + str(product_name) + '|' + str(product_desc)
+            string = string + product_string + ','
+        while True:
+            try:
+                time.sleep(15)
+                prompt = f"내가 찾는 재료는 **'{name}'**이고, **'{search_keyword}'**으로 쓰일 거야. 아래 컬리 상품 상품ID | 상품명 으로 구성된 데이터 5개 중에서 이 조리법에 가장 잘 맞는 상품은 뭐야? 상품ID만 출력해 {string}"
+                response = gemini_client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[prompt],
+                    config=genai.types.GenerateContentConfig(
+                        temperature=0.0,
+                        response_mime_type="application/json"
+                    )
+                )
+                product_id = json.loads(response.text)
+                product_url = f'https://www.kurly.com/goods/{product_id}'
+                product_list.append([product_img,product_name,product_url,url])
+                print(f"{product_name} 성공")
+            except Exception as e:
+                if "429" in str(e):
+                    print("쿼터 초과! 15초 더 쉽니다...")
+                    time.sleep(15)
+                    continue
+                else:
+                    raise e
+                
+    return product_list
+product_info = product_select(material_list)
